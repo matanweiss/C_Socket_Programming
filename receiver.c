@@ -13,6 +13,71 @@
 #define HALF_FILE_SIZE 1050426
 #define FILE_NAME "received.txt"
 
+int get_file(int senderSocket)
+{
+    while (1)
+    {
+
+        // long fileSize;
+        // if (recv(senderSocket, &fileSize, sizeof(fileSize), 0) < 0)
+        // {
+        //     perror("recv() failed");
+        //     return -1;
+        // }
+        // printf("%ld", fileSize);
+        // if (!fileSize)
+        // {
+        //     break;
+        // }
+
+        // FILE *fp = fopen(FILE_NAME, "w");
+
+        // receiving the first half
+        char buffer[HALF_FILE_SIZE];
+        bzero(buffer, HALF_FILE_SIZE);
+        while (strcmp(buffer, "sent"))
+        {
+            if (recv(senderSocket, buffer, BUFFER_SIZE, 0) < 0)
+            {
+                perror("recv() failed");
+                return -1;
+            }
+            if (!strcmp(buffer, "exit"))
+            {
+                return 0;
+            }
+        }
+        bzero(buffer, HALF_FILE_SIZE);
+
+        printf("received the first half of the file\n");
+
+        // sending authentication
+        int id1 = 2264;
+        int id2 = 8585;
+        int authentication = id1 ^ id2;
+        if (send(senderSocket, &authentication, sizeof(authentication), 0) == -1)
+        {
+            perror("send() failed");
+            return -1;
+        }
+
+        // receiving the second half
+        while (strcmp(buffer, "sent"))
+        {
+            if (recv(senderSocket, buffer, BUFFER_SIZE, 0) < 0)
+            {
+                perror("recv() failed");
+                return -1;
+            }
+            if (!strcmp(buffer, "exit"))
+            {
+                return 0;
+            }
+        }
+        printf("received the second half of the file\n");
+    }
+}
+
 int main()
 {
     // signal(SIGPIPE, SIG_IGN);  // on linux to prevent crash on closing socket
@@ -53,13 +118,12 @@ int main()
         return -1;
     }
 
-    // accept incoming connection
-    printf("Waiting for connections...\n");
-    struct sockaddr_in senderAddress; //
-    socklen_t senderAddressLen = sizeof(senderAddress);
-
     while (1)
     {
+        // accept incoming connection
+        printf("Waiting for connections...\n");
+        struct sockaddr_in senderAddress; //
+        socklen_t senderAddressLen = sizeof(senderAddress);
         memset(&senderAddress, 0, sizeof(senderAddress));
         senderAddressLen = sizeof(senderAddress);
         int senderSocket = accept(socketObject, (struct sockaddr *)&senderAddress, &senderAddressLen);
@@ -72,44 +136,11 @@ int main()
 
         printf("Sender connection accepted\n");
 
-        FILE *fp = fopen(FILE_NAME, "w");
-        char buffer[BUFFER_SIZE];
-        long n = 0;
-        while ((n += recv(senderSocket, buffer, BUFFER_SIZE, 0)) > 0 && HALF_FILE_SIZE > n)
+        if (get_file(senderSocket) == -1)
         {
-
-            // fwrite(buffer, sizeof(char), BUFFER_SIZE, fp);
-            fprintf(fp, "%s", buffer);
-            bzero(buffer, BUFFER_SIZE);
-        }
-        // fseek(fp, 0L, SEEK_END);
-
-        long endOfFirstHalf = ftell(fp);
-        printf("received file of size %ld\n", endOfFirstHalf);
-
-        fclose(fp);
-
-        int id1 = 2264;
-        int id2 = 8585;
-        int authentication = id1 ^ id2;
-        if (send(senderSocket, &authentication, sizeof(authentication), 0) == -1)
-        {
-            perror("send() failed");
+            close(socketObject);
             return -1;
         }
-        bzero(buffer, BUFFER_SIZE);
-
-        fopen(FILE_NAME, "a");
-
-        while (recv(senderSocket, buffer, BUFFER_SIZE, 0) > 0)
-        {
-
-            // fwrite(buffer, sizeof(char), BUFFER_SIZE, fp);
-            fprintf(fp, "%s", buffer);
-            bzero(buffer, BUFFER_SIZE);
-        }
-        // fseek(fp, 0L, SEEK_END);
-        printf("received file of size %ld\n", ftell(fp) - endOfFirstHalf);
     }
 
     close(socketObject);

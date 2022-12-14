@@ -15,58 +15,72 @@
 
 int main()
 {
+    // opening the file
+    FILE *fp;
+    fp = fopen(FILE_NAME, "r");
+    if (fp == NULL)
+    {
+        perror("fopen() failed");
+        return -1;
+    }
+
+    // getting the file size
+    fseek(fp, 0L, SEEK_END);
+    long fileSize = ftell(fp);
+    long halfSize = fileSize / 2;
+    rewind(fp);
+
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock == -1)
+    {
+        perror("socket() failed");
+        return -1;
+    }
+
+    // "sockaddr_in" is the "derived" from sockaddr structure
+    // used for IPv4 communication. For IPv6, use sockaddr_in6
+    //
+    struct sockaddr_in Address;
+    memset(&Address, 0, sizeof(Address));
+
+    Address.sin_family = AF_INET;
+    Address.sin_port = htons(SERVER_PORT);                                                   // (5001 = 0x89 0x13) little endian => (0x13 0x89) network endian (big endian)
+    int inetResult = inet_pton(AF_INET, (const char *)SERVER_IP_ADDRESS, &Address.sin_addr); // convert IPv4 and IPv6 addresses from text to binary form
+    // e.g. 127.0.0.1 => 0x7f000001 => 01111111.00000000.00000000.00000001 => 2130706433
+    if (inetResult <= 0)
+    {
+        perror("inet_pton() failed");
+        return -1;
+    }
+
+    // connect to receiver
+    int connectResult = connect(sock, (struct sockaddr *)&Address, sizeof(Address));
+    if (connectResult == -1)
+    {
+        perror("connect() failed");
+        close(sock);
+        return -1;
+    }
+
+    printf("connected to receiver\n");
+
     char choise = 'y';
     while (choise == 'y')
     {
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock == -1)
+
+        // sending the file size
+        // if (send(sock, &fileSize, sizeof(fileSize), 0) == -1)
+        // {
+        //     perror("send() failed");
+        //     return -1;
+        // }
+
+        // changing cc algorithm
+        if (setsockopt(sock, IPPROTO_TCP, TCP_CONGESTION, "cubic", 5) != 0)
         {
-            perror("socket() failed");
-            return -1;
+            perror("setsockopt() failed");
+            return 1;
         }
-
-        // "sockaddr_in" is the "derived" from sockaddr structure
-        // used for IPv4 communication. For IPv6, use sockaddr_in6
-        //
-        struct sockaddr_in Address;
-        memset(&Address, 0, sizeof(Address));
-
-        Address.sin_family = AF_INET;
-        Address.sin_port = htons(SERVER_PORT);                                                   // (5001 = 0x89 0x13) little endian => (0x13 0x89) network endian (big endian)
-        int inetResult = inet_pton(AF_INET, (const char *)SERVER_IP_ADDRESS, &Address.sin_addr); // convert IPv4 and IPv6 addresses from text to binary form
-        // e.g. 127.0.0.1 => 0x7f000001 => 01111111.00000000.00000000.00000001 => 2130706433
-        if (inetResult <= 0)
-        {
-            perror("inet_pton() failed");
-            return -1;
-        }
-
-        // connect to receiver
-        int connectResult = connect(sock, (struct sockaddr *)&Address, sizeof(Address));
-        if (connectResult == -1)
-        {
-            perror("connect() failed");
-            close(sock);
-            return -1;
-        }
-
-        printf("connected to receiver\n");
-
-        // opening the file
-        FILE *fp;
-        fp = fopen(FILE_NAME, "r");
-        if (fp == NULL)
-        {
-            perror("fopen() failed");
-            return -1;
-        }
-
-        // getting the file size
-        fseek(fp, 0L, SEEK_END);
-        long fileSize = ftell(fp);
-        long halfSize = fileSize / 2;
-        rewind(fp);
-
         // sending the first part
         char data[BUFFER_SIZE] = {0};
         while (fgets(data, BUFFER_SIZE, fp) != NULL && ftell(fp) < halfSize)
@@ -77,6 +91,12 @@ int main()
                 return -1;
             }
             bzero(data, BUFFER_SIZE);
+        }
+        strcpy(data, "sent");
+        if (send(sock, data, sizeof(data), 0) == -1)
+        {
+            perror("send() failed");
+            return -1;
         }
 
         long endOfFirstHalf = ftell(fp);
@@ -118,15 +138,28 @@ int main()
             }
             bzero(data, BUFFER_SIZE);
         }
+        strcpy(data, "sent");
+        if (send(sock, data, sizeof(data), 0) == -1)
+        {
+            perror("send() failed");
+            return -1;
+        }
 
         printf("sent file of size %ld\n", ftell(fp) - endOfFirstHalf);
 
-        fclose(fp);
-        fp = NULL;
+        rewind(fp);
 
         printf("send the file again? y/n\n");
         scanf(" %c", &choise);
-        close(sock);
     }
+    char *message = "exit";
+    if (send(sock, message, sizeof(message), 0) == -1)
+    {
+        perror("send() failed");
+        return -1;
+    }
+    close(sock);
+    fclose(fp);
+    fp = NULL;
     return 0;
 }
