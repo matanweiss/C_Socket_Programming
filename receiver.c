@@ -12,23 +12,13 @@
 #define BUFFER_SIZE 2048
 #define HALF_FILE_SIZE 1050426
 #define FILE_NAME "received.txt"
+#define ID1 2264
+#define ID2 8585
 
 int get_file(int senderSocket)
 {
     while (1)
     {
-
-        // long fileSize;
-        // if (recv(senderSocket, &fileSize, sizeof(fileSize), 0) < 0)
-        // {
-        //     perror("recv() failed");
-        //     return -1;
-        // }
-        // printf("%ld", fileSize);
-        // if (!fileSize)
-        // {
-        //     break;
-        // }
 
         // FILE *fp = fopen(FILE_NAME, "w");
 
@@ -52,9 +42,7 @@ int get_file(int senderSocket)
         printf("received the first half of the file\n");
 
         // sending authentication
-        int id1 = 2264;
-        int id2 = 8585;
-        int authentication = id1 ^ id2;
+        int authentication = ID1 ^ ID2;
         if (send(senderSocket, &authentication, sizeof(authentication), 0) == -1)
         {
             perror("send() failed");
