@@ -6,23 +6,56 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <netinet/tcp.h>
 #include <unistd.h>
+#include <sys/time.h>
+
+#define CVECTOR_LOGARITHMIC_GROWTH
+#include "cvector.h"
 
 #define SERVER_PORT 5060
 #define BUFFER_SIZE 2048
 #define HALF_FILE_SIZE 1050426
-#define FILE_NAME "received.txt"
 #define ID1 2264
 #define ID2 8585
 
-int get_file(int senderSocket)
+void printTimes(long *times)
 {
+    if (times)
+    {
+        int count = 0;
+        long firstSum = 0, secondSum = 0;
+        for (size_t i = 0; i < cvector_size(times); i = i + 2)
+        {
+            count++;
+            firstSum += times[i];
+            printf("first part time of file %ld: %ld\n", (i / 2) + 1, times[i]);
+            secondSum += times[i + 1];
+            printf("second part time of file %ld: %ld\n", (i / 2) + 1, times[i + 1]);
+        }
+        printf("average time to send the first part: %ld\n", firstSum / count);
+        printf("average time to send the second part: %ld\n", secondSum / count);
+        cvector_free(times);
+    }
+}
+
+int get_files(int senderSocket)
+{
+
+    cvector_vector_type(long) times = NULL;
+    struct timeval start, end;
+
     while (1)
     {
-
-        // FILE *fp = fopen(FILE_NAME, "w");
+        // setting cc algorithm to default value
+        if (setsockopt(senderSocket, IPPROTO_TCP, TCP_CONGESTION, "cubic", 5) != 0)
+        {
+            perror("setsockopt() failed");
+            return 1;
+        }
 
         // receiving the first half
+        gettimeofday(&start, NULL);
         char buffer[HALF_FILE_SIZE];
         bzero(buffer, HALF_FILE_SIZE);
         while (strcmp(buffer, "sent"))
@@ -34,12 +67,19 @@ int get_file(int senderSocket)
             }
             if (!strcmp(buffer, "exit"))
             {
+                printTimes(times);
                 return 0;
             }
         }
-        bzero(buffer, HALF_FILE_SIZE);
 
+        gettimeofday(&end, NULL);
+        bzero(buffer, HALF_FILE_SIZE);
         printf("received the first half of the file\n");
+
+        // measuring the time to it took to receive the first part
+        long timeDelta = end.tv_usec - start.tv_usec;
+        timeDelta = (timeDelta < 0) ? timeDelta + 1000000 : timeDelta;
+        cvector_push_back(times, timeDelta);
 
         // sending authentication
         int authentication = ID1 ^ ID2;
@@ -49,7 +89,15 @@ int get_file(int senderSocket)
             return -1;
         }
 
+        // changing cc algorithm
+        if (setsockopt(senderSocket, IPPROTO_TCP, TCP_CONGESTION, "reno", 4) != 0)
+        {
+            perror("setsockopt() failed");
+            return 1;
+        }
+
         // receiving the second half
+        gettimeofday(&start, NULL);
         while (strcmp(buffer, "sent"))
         {
             if (recv(senderSocket, buffer, BUFFER_SIZE, 0) < 0)
@@ -59,9 +107,17 @@ int get_file(int senderSocket)
             }
             if (!strcmp(buffer, "exit"))
             {
+                printTimes(times);
                 return 0;
             }
         }
+
+        // measuring the time to it took to receive the secont part
+        gettimeofday(&end, NULL);
+        timeDelta = end.tv_usec - start.tv_usec;
+        timeDelta = (timeDelta < 0) ? timeDelta + 1000000 : timeDelta;
+        cvector_push_back(times, timeDelta);
+
         printf("received the second half of the file\n");
     }
 }
@@ -124,7 +180,7 @@ int main()
 
         printf("Sender connection accepted\n");
 
-        if (get_file(senderSocket) == -1)
+        if (get_files(senderSocket) == -1)
         {
             close(socketObject);
             return -1;
