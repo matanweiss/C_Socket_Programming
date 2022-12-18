@@ -56,11 +56,11 @@ int get_files(int senderSocket)
 
         // receiving the first half
         gettimeofday(&start, NULL);
-        char buffer[HALF_FILE_SIZE];
-        bzero(buffer, HALF_FILE_SIZE);
-        while (strcmp(buffer, "sent"))
+        char buffer[HALF_FILE_SIZE] = {0};
+        size_t n = 0;
+        while (n < HALF_FILE_SIZE)
         {
-            if (recv(senderSocket, buffer, BUFFER_SIZE, 0) < 0)
+            if ((n += recv(senderSocket, buffer, BUFFER_SIZE, 0)) < 0)
             {
                 perror("recv() failed");
                 return -1;
@@ -74,7 +74,7 @@ int get_files(int senderSocket)
 
         gettimeofday(&end, NULL);
         bzero(buffer, HALF_FILE_SIZE);
-        printf("received the first half of the file\n");
+        printf("received the first half of the file, size %ld\n", n);
 
         // measuring the time to it took to receive the first part
         long timeDelta = (end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec;
@@ -97,9 +97,10 @@ int get_files(int senderSocket)
 
         // receiving the second half
         gettimeofday(&start, NULL);
-        while (strcmp(buffer, "sent"))
+        n = 0;
+        while (n < HALF_FILE_SIZE)
         {
-            if (recv(senderSocket, buffer, BUFFER_SIZE, 0) < 0)
+            if ((n += recv(senderSocket, buffer, BUFFER_SIZE, 0)) < 0)
             {
                 perror("recv() failed");
                 return -1;
@@ -116,7 +117,7 @@ int get_files(int senderSocket)
         timeDelta = (end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec;
         cvector_push_back(times, timeDelta);
 
-        printf("received the second half of the file\n");
+        printf("received the second half of the file, size %ld\n", n);
     }
 }
 

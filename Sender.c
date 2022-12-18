@@ -76,25 +76,14 @@ int main()
         }
 
         // sending the first part of the file
-        char data[BUFFER_SIZE] = {0};
-        while (fgets(data, BUFFER_SIZE, fp) != NULL && ftell(fp) < halfSize)
-        {
-            if (send(sock, data, sizeof(data), 0) == -1)
-            {
-                perror("send() failed");
-                return -1;
-            }
-            bzero(data, BUFFER_SIZE);
-        }
-
-        // notifying the receiver that the first part has been sent
-        strcpy(data, "sent");
+        char data[halfSize];
+        fread(data, 1, halfSize, fp);
         if (send(sock, data, sizeof(data), 0) == -1)
         {
             perror("send() failed");
             return -1;
         }
-
+        bzero(data, halfSize);
         long endOfFirstHalf = ftell(fp);
         printf("sent file of size %ld\n", endOfFirstHalf);
 
@@ -127,24 +116,13 @@ int main()
         }
 
         // sending the second part
-        while (fgets(data, BUFFER_SIZE, fp) != NULL)
-        {
-            if (send(sock, data, sizeof(data), 0) == -1)
-            {
-                perror("send() failed");
-                return -1;
-            }
-            bzero(data, BUFFER_SIZE);
-        }
-
-        // notifying the receiver that the first part has been sent
-        strcpy(data, "sent");
+        fread(data, 1, halfSize, fp);
         if (send(sock, data, sizeof(data), 0) == -1)
         {
             perror("send() failed");
             return -1;
         }
-
+        bzero(data, BUFFER_SIZE);
         printf("sent file of size %ld\n", ftell(fp) - endOfFirstHalf);
 
         // returning the file position to the beginning of the file
