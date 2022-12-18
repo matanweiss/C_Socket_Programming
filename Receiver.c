@@ -77,8 +77,7 @@ int get_files(int senderSocket)
         printf("received the first half of the file\n");
 
         // measuring the time to it took to receive the first part
-        long timeDelta = end.tv_usec - start.tv_usec;
-        timeDelta = (timeDelta < 0) ? timeDelta + 1000000 : timeDelta;
+        long timeDelta = (end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec;
         cvector_push_back(times, timeDelta);
 
         // sending authentication
@@ -114,8 +113,7 @@ int get_files(int senderSocket)
 
         // measuring the time to it took to receive the secont part
         gettimeofday(&end, NULL);
-        timeDelta = end.tv_usec - start.tv_usec;
-        timeDelta = (timeDelta < 0) ? timeDelta + 1000000 : timeDelta;
+        timeDelta = (end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec;
         cvector_push_back(times, timeDelta);
 
         printf("received the second half of the file\n");
