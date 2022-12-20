@@ -13,28 +13,29 @@
 #define CVECTOR_LOGARITHMIC_GROWTH
 #include "cvector.h"
 
-#define SERVER_PORT 5060
+#define PORT 9999
 #define BUFFER_SIZE 2048
 #define HALF_FILE_SIZE 1050426
 #define ID1 2264
 #define ID2 8585
 
-void printTimes(long *times)
+void printTimes(double *times)
 {
     if (times)
     {
         int count = 0;
-        long firstSum = 0, secondSum = 0;
+        double firstSum = 0, secondSum = 0;
         for (size_t i = 0; i < cvector_size(times); i = i + 2)
         {
             count++;
             firstSum += times[i];
-            printf("first part time of file %ld: %ld\n", (i / 2) + 1, times[i]);
+            printf("first part time of file %ld: %f\n", (i / 2) + 1, times[i]);
             secondSum += times[i + 1];
-            printf("second part time of file %ld: %ld\n", (i / 2) + 1, times[i + 1]);
+            printf("second part time of file %ld: %f\n", (i / 2) + 1, times[i + 1]);
         }
-        printf("average time to send the first part: %ld\n", firstSum / count);
-        printf("average time to send the second part: %ld\n", secondSum / count);
+        printf("average time for sending the first part: %f seconds\n", firstSum / count);
+        printf("average time for sending the second part: %f seconds\n", secondSum / count);
+        printf("average time for sending the whole file: %f seconds\n", (firstSum + secondSum) / count);
         cvector_free(times);
     }
 }
@@ -42,22 +43,23 @@ void printTimes(long *times)
 int get_files(int senderSocket)
 {
 
-    cvector_vector_type(long) times = NULL;
+    cvector_vector_type(double) times = NULL;
     struct timeval start, end;
 
     while (1)
     {
         // setting cc algorithm to default value
-        if (setsockopt(senderSocket, IPPROTO_TCP, TCP_CONGESTION, "cubic", 5) != 0)
+        if (setsockopt(senderSocket, IPPROTO_TCP, TCP_CONGESTION, "reno", 4) != 0)
         {
             perror("setsockopt() failed");
             return 1;
         }
 
         // receiving the first half
-        gettimeofday(&start, NULL);
         char buffer[HALF_FILE_SIZE] = {0};
         size_t n = 0;
+
+        gettimeofday(&start, NULL);
         while (n < HALF_FILE_SIZE)
         {
             if ((n += recv(senderSocket, buffer, BUFFER_SIZE, 0)) < 0)
@@ -77,7 +79,7 @@ int get_files(int senderSocket)
         printf("received the first half of the file, size %ld\n", n);
 
         // measuring the time to it took to receive the first part
-        long timeDelta = (end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec;
+        double timeDelta = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         cvector_push_back(times, timeDelta);
 
         // sending authentication
@@ -89,15 +91,15 @@ int get_files(int senderSocket)
         }
 
         // changing cc algorithm
-        if (setsockopt(senderSocket, IPPROTO_TCP, TCP_CONGESTION, "reno", 4) != 0)
+        if (setsockopt(senderSocket, IPPROTO_TCP, TCP_CONGESTION, "cubic", 5) != 0)
         {
             perror("setsockopt() failed");
             return 1;
         }
 
         // receiving the second half
-        gettimeofday(&start, NULL);
         n = 0;
+        gettimeofday(&start, NULL);
         while (n < HALF_FILE_SIZE)
         {
             if ((n += recv(senderSocket, buffer, BUFFER_SIZE, 0)) < 0)
@@ -111,10 +113,10 @@ int get_files(int senderSocket)
                 return 0;
             }
         }
+        gettimeofday(&end, NULL);
 
         // measuring the time to it took to receive the secont part
-        gettimeofday(&end, NULL);
-        timeDelta = (end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec;
+        timeDelta = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         cvector_push_back(times, timeDelta);
 
         printf("received the second half of the file, size %ld\n", n);
@@ -140,8 +142,8 @@ int main()
     memset(&Address, 0, sizeof(Address));
 
     Address.sin_family = AF_INET;
-    Address.sin_addr.s_addr = INADDR_ANY;  // any IP at this port (Address to accept any incoming messages)
-    Address.sin_port = htons(SERVER_PORT); // network order (makes byte order consistent)
+    Address.sin_addr.s_addr = INADDR_ANY; // any IP at this port (Address to accept any incoming messages)
+    Address.sin_port = htons(PORT);       // network order (makes byte order consistent)
 
     // Bind the socket to the port with any IP at this port
     int bindResult = bind(socketObject, (struct sockaddr *)&Address, sizeof(Address));

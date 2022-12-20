@@ -8,8 +8,8 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
-#define SERVER_PORT 5060
-#define SERVER_IP_ADDRESS "127.0.0.1"
+#define PORT 9999
+#define IP_ADDRESS "127.0.0.1"
 #define BUFFER_SIZE 2048
 #define FILE_NAME "file.txt"
 #define ID1 2264
@@ -44,9 +44,8 @@ int main()
     memset(&Address, 0, sizeof(Address));
 
     Address.sin_family = AF_INET;
-    Address.sin_port = htons(SERVER_PORT);                                                   // (5001 = 0x89 0x13) little endian => (0x13 0x89) network endian (big endian)
-    int inetResult = inet_pton(AF_INET, (const char *)SERVER_IP_ADDRESS, &Address.sin_addr); // convert IPv4 and IPv6 addresses from text to binary form
-    // e.g. 127.0.0.1 => 0x7f000001 => 01111111.00000000.00000000.00000001 => 2130706433
+    Address.sin_port = htons(PORT);
+    int inetResult = inet_pton(AF_INET, (const char *)IP_ADDRESS, &Address.sin_addr);
     if (inetResult <= 0)
     {
         perror("inet_pton() failed");
@@ -69,7 +68,7 @@ int main()
     {
 
         // setting cc algorithm to default value
-        if (setsockopt(sock, IPPROTO_TCP, TCP_CONGESTION, "cubic", 5) != 0)
+        if (setsockopt(sock, IPPROTO_TCP, TCP_CONGESTION, "reno", 4) != 0)
         {
             perror("setsockopt() failed");
             return 1;
@@ -90,13 +89,13 @@ int main()
         // authenticating
 
         int authentication = ID1 ^ ID2;
-        int serverAuthentication;
-        if (recv(sock, &serverAuthentication, sizeof(int), 0) <= 0)
+        int receiverAuthentication;
+        if (recv(sock, &receiverAuthentication, sizeof(int), 0) <= 0)
         {
             perror("recv() failed");
             return -1;
         }
-        if (authentication == serverAuthentication)
+        if (authentication == receiverAuthentication)
         {
             printf("authentication succeeded \n");
         }
@@ -109,7 +108,7 @@ int main()
         }
 
         // changing cc algorithm
-        if (setsockopt(sock, IPPROTO_TCP, TCP_CONGESTION, "reno", 4) != 0)
+        if (setsockopt(sock, IPPROTO_TCP, TCP_CONGESTION, "cubic", 5) != 0)
         {
             perror("setsockopt() failed");
             return 1;
